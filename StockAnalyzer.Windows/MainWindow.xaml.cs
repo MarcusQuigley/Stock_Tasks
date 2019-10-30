@@ -37,13 +37,18 @@ namespace StockAnalyzer.Windows
             Search.Content = "Cancel";
             #endregion
 
-            var loadedLines = Task<string[]>.Run(() =>
-               {
-                   return File.ReadAllLines(@"StockPrices_Small.csv");
-               });
-
-            loadedLines.ContinueWith<List<StockPrice>>(antecendent =>
+            if (cancellationTokenSource != null)
             {
+                cancellationTokenSource.Cancel();
+                cancellationTokenSource = null;
+                return;
+            }
+            cancellationTokenSource = new CancellationTokenSource();
+            var loadedLinesTask = SearchForStocks(cancellationTokenSource.Token);
+
+            loadedLinesTask.ContinueWith<List<StockPrice>>(antecendent =>
+            {
+                
                 var data = new List<StockPrice>();
 
                 foreach (var line in antecendent.Result.Skip(1))
@@ -62,23 +67,32 @@ namespace StockAnalyzer.Windows
                     data.Add(price);
                 }
                 return data;
-            }).ContinueWith(antecentent2 =>
+            },TaskContinuationOptions.OnlyOnRanToCompletion).ContinueWith(prices =>
             {
-                Action action = () => Stocks.ItemsSource = antecentent2.Result.Where(price => price.Ticker == Ticker.Text.ToUpper());
+                Action action = () => Stocks.ItemsSource = prices.Result.Where(price => price.Ticker == Ticker.Text.ToUpper());
                 Dispatcher.BeginInvoke(action);
+                return prices.Result.Count;
 
-            }).ContinueWith(_ =>
+            },  TaskContinuationOptions.OnlyOnRanToCompletion
+            ).ContinueWith(count=>
             {
                 Action action = () =>
                 {
                     #region After stock data is loaded
-                    StocksStatus.Text = $"Loaded stocks for {Ticker.Text} in {watch.ElapsedMilliseconds}ms";
+                    StocksStatus.Text = $"Loaded stocks for {Ticker.Text} in {watch.ElapsedMilliseconds}ms, loaded {count.Result} lines";
                     StockProgress.Visibility = Visibility.Hidden;
                     Search.Content = "Search";
                     #endregion
                 };
                 Dispatcher.BeginInvoke(action);
             });
+
+            loadedLinesTask.ContinueWith(antecendent =>
+           {
+               Action action = () => Notes.Text += antecendent.Exception.InnerException.Message;
+               Dispatcher.BeginInvoke(action);
+
+           }, TaskContinuationOptions.OnlyOnFaulted);
         }
 
         private Task<List<string>> SearchForStocks(CancellationToken cancellationToken)
