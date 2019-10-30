@@ -95,6 +95,73 @@ namespace StockAnalyzer.Windows
            }, TaskContinuationOptions.OnlyOnFaulted);
         }
 
+        private async void Search_Multiple_Click(object sender, RoutedEventArgs e)
+        {
+            #region Before loading stock data
+            var watch = new Stopwatch();
+            watch.Start();
+            StockProgress.Visibility = Visibility.Visible;
+            StockProgress.IsIndeterminate = true;
+
+            SearchMulti.Content = "Cancel";
+            #endregion
+
+            if (cancellationTokenSource != null)
+            {
+                cancellationTokenSource.Cancel();
+                cancellationTokenSource = null;
+                return;
+            }
+            cancellationTokenSource = new CancellationTokenSource();
+            cancellationTokenSource.Token.Register(() =>
+            {
+                Notes.Text += "Cancellation requested" + Environment.NewLine;
+            });
+
+            try
+            {
+
+                var tickers = Ticker.Text.ToUpper().Split(',', ' ');
+                var service = new StockService();
+                var stocks = new ConcurrentBag<StockPrice>();
+
+                var tickerLoadingTasks = new List<Task<IEnumerable<StockPrice>>>();
+                foreach (var ticker in tickers)
+                {
+                    var loadTask = service.GetStockPricesFor(ticker);
+                    tickerLoadingTasks.Add(loadTask);
+                }
+                var timeOutTask = Task.Delay(2000);
+                var resultTask = Task.WhenAll(tickerLoadingTasks);
+                var completedTask = await Task.WhenAny(timeOutTask, resultTask);
+
+
+                if (completedTask == timeOutTask)
+                {
+                    cancellationTokenSource.Cancel();
+                    cancellationTokenSource = null;
+                    throw new Exception("Timeout");
+                }
+                     Stocks.ItemsSource = resultTask.Result.SelectMany(stock => stock);
+             }
+            catch (Exception ex)
+            {
+                Notes.Text += ex.Message + Environment.NewLine;
+            }
+
+            finally
+            {
+                cancellationTokenSource = null;
+            }
+
+            #region After stock data is loaded
+            StocksStatus.Text = $"Loaded stocks for {Ticker.Text} in {watch.ElapsedMilliseconds}ms";
+            StockProgress.Visibility = Visibility.Hidden;
+            SearchMulti.Content = "Search Multi";
+            #endregion
+
+        }
+
         private Task<List<string>> SearchForStocks(CancellationToken cancellationToken)
         {
             var loadLinesTask = Task.Run(async () =>

@@ -28,7 +28,7 @@
         </StatusBar>
         <Grid Margin="5">
             <Grid.RowDefinitions>
-                <RowDefinition Height="60" />
+                <RowDefinition Height="100" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <GroupBox Padding="5">
@@ -40,8 +40,13 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="100" />
                     </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition  />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
                     <TextBox Grid.Column="0" Padding="3" Margin="0 0 20 0" x:Name="Ticker" Text="msft"></TextBox>
                     <Button x:Name="Search" Grid.Column="1" Click="Search_Click" IsDefault="True">Search</Button>
+                    <Button x:Name="SearchMulti" Grid.Column="1" Grid.Row="1" Click="Search_Multiple_Click" IsDefault="True">Search Multi</Button>
                 </Grid>
             </GroupBox>
             <Grid Grid.Row="1">
