@@ -37,33 +37,48 @@ namespace StockAnalyzer.Windows
             Search.Content = "Cancel";
             #endregion
 
-            var lines = File.ReadAllLines(@"StockPrices_Small.csv");
+            var loadedLines = Task<string[]>.Run(() =>
+               {
+                   return File.ReadAllLines(@"StockPrices_Small.csv");
+               });
 
-            var data = new List<StockPrice>();
-
-            foreach (var line in lines.Skip(1))
+            loadedLines.ContinueWith<List<StockPrice>>(antecendent =>
             {
-                var segments = line.Split(',');
+                var data = new List<StockPrice>();
 
-                for (var i = 0; i < segments.Length; i++) segments[i] = segments[i].Trim('\'', '"');
-                var price = new StockPrice
+                foreach (var line in antecendent.Result.Skip(1))
                 {
-                    Ticker = segments[0],
-                    TradeDate = DateTime.ParseExact(segments[1], "M/d/yyyy h:mm:ss tt", CultureInfo.InvariantCulture),
-                    Volume = Convert.ToInt32(segments[6], CultureInfo.InvariantCulture),
-                    Change = Convert.ToDecimal(segments[7], CultureInfo.InvariantCulture),
-                    ChangePercent = Convert.ToDecimal(segments[8], CultureInfo.InvariantCulture),
+                    var segments = line.Split(',');
+
+                    for (var i = 0; i < segments.Length; i++) segments[i] = segments[i].Trim('\'', '"');
+                    var price = new StockPrice
+                    {
+                        Ticker = segments[0],
+                        TradeDate = DateTime.ParseExact(segments[1], "M/d/yyyy h:mm:ss tt", CultureInfo.InvariantCulture),
+                        Volume = Convert.ToInt32(segments[6], CultureInfo.InvariantCulture),
+                        Change = Convert.ToDecimal(segments[7], CultureInfo.InvariantCulture),
+                        ChangePercent = Convert.ToDecimal(segments[8], CultureInfo.InvariantCulture),
+                    };
+                    data.Add(price);
+                }
+                return data;
+            }).ContinueWith(antecentent2 =>
+            {
+                Action action = () => Stocks.ItemsSource = antecentent2.Result.Where(price => price.Ticker == Ticker.Text.ToUpper());
+                Dispatcher.BeginInvoke(action);
+
+            }).ContinueWith(_ =>
+            {
+                Action action = () =>
+                {
+                    #region After stock data is loaded
+                    StocksStatus.Text = $"Loaded stocks for {Ticker.Text} in {watch.ElapsedMilliseconds}ms";
+                    StockProgress.Visibility = Visibility.Hidden;
+                    Search.Content = "Search";
+                    #endregion
                 };
-                data.Add(price);
-            }
-
-            Stocks.ItemsSource = data.Where(price => price.Ticker == Ticker.Text.ToUpper());
-
-            #region After stock data is loaded
-            StocksStatus.Text = $"Loaded stocks for {Ticker.Text} in {watch.ElapsedMilliseconds}ms";
-            StockProgress.Visibility = Visibility.Hidden;
-            Search.Content = "Search";
-            #endregion
+                Dispatcher.BeginInvoke(action);
+            });
         }
 
         private Task<List<string>> SearchForStocks(CancellationToken cancellationToken)
