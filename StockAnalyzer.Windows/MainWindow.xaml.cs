@@ -128,21 +128,22 @@ namespace StockAnalyzer.Windows
                 var tickerLoadingTasks = new List<Task<IEnumerable<StockPrice>>>();
                 foreach (var ticker in tickers)
                 {
-                    var loadTask = service.GetStockPricesFor(ticker);
+                    var loadTask = service.GetStockPricesFor(ticker, cancellationTokenSource.Token)
+                        .ContinueWith(t => {
+                            foreach(var stock in t.Result.Take(5))
+                            {
+                                stocks.Add(stock);
+                            }
+
+                            Dispatcher.Invoke(() => Stocks.ItemsSource = stocks.ToArray());
+                            return t.Result;
+                        });
                     tickerLoadingTasks.Add(loadTask);
                 }
-                var timeOutTask = Task.Delay(2000);
+                
                 var resultTask = Task.WhenAll(tickerLoadingTasks);
-                var completedTask = await Task.WhenAny(timeOutTask, resultTask);
-
-
-                if (completedTask == timeOutTask)
-                {
-                    cancellationTokenSource.Cancel();
-                    cancellationTokenSource = null;
-                    throw new Exception("Timeout");
-                }
-                     Stocks.ItemsSource = resultTask.Result.SelectMany(stock => stock);
+                await resultTask;
+                    
              }
             catch (Exception ex)
             {
